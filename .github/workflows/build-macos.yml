@@ -28,10 +28,18 @@ jobs:
     - name: Build macOS app
       run: flutter build macos
 
+    - name: Verify build output
+      run: ls -la build/macos/Build/Products/Release/
+
     - name: Create zip
       working-directory: build/macos/Build/Products/Release
       run: |
-        zip -r "El imperio romano de cori.zip" "El imperio romano de cori.app"
+        if [ -d "El imperio romano de cori.app" ]; then
+          zip -r "El imperio romano de cori.zip" "El imperio romano de cori.app"
+        else
+          echo "Error: App bundle not found!"
+          exit 1
+        fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
