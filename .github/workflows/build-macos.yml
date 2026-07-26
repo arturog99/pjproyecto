@@ -1,0 +1,41 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.0'
+        channel: 'stable'
+        cache: true
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Build macOS app
+      run: flutter build macos
+
+    - name: Create zip
+      working-directory: build/macos/Build/Products/Release
+      run: |
+        zip -r "El imperio romano de cori.zip" "El imperio romano de cori.app"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-app
+        path: build/macos/Build/Products/Release/El imperio romano de cori.zip
+        retention-days: 30
