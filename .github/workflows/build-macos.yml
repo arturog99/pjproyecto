@@ -12,38 +12,44 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.44.8'
-        channel: 'stable'
-        cache: true
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: 'stable'
+          cache: true
 
-    - name: Get dependencies
-      run: flutter pub get
+      - name: Get dependencies
+        run: flutter pub get
 
-    - name: Build macOS app
-      run: flutter build macos
+      - name: Build macOS app
+        run: flutter build macos
 
-    - name: Verify build output
-      run: ls -la build/macos/Build/Products/Release/
+      - name: Verify build output
+        run: ls -la build/macos/Build/Products/Release/
 
-    - name: Create zip
-      working-directory: build/macos/Build/Products/Release
-      run: |
-        if [ -d "El imperio romano de cori.app" ]; then
-          zip -r "El imperio romano de cori.zip" "El imperio romano de cori.app"
-        else
-          echo "Error: App bundle not found!"
-          exit 1
-        fi
+      - name: Create zip
+        working-directory: build/macos/Build/Products/Release
+        run: |
+          APP_BUNDLE=$(find . -maxdepth 1 -name "*.app" -print -quit)
+          
+          if [ -z "$APP_BUNDLE" ]; then
+            echo "Error: No .app bundle found in build output!"
+            exit 1
+          fi
+          
+          APP_NAME=$(basename "$APP_BUNDLE")
+          echo "Found app bundle: $APP_NAME"
+          echo "APP_NAME=$APP_NAME" >> "$GITHUB_ENV"
+          
+          zip -r "${APP_NAME%.app}.zip" "$APP_NAME"
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: macos-app
-        path: build/macos/Build/Products/Release/El imperio romano de cori.zip
-        retention-days: 30
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: build/macos/Build/Products/Release/${{ env.APP_NAME }}
+          retention-days: 30
