@@ -42,14 +42,18 @@ jobs:
           fi
           
           APP_NAME=$(basename "$APP_BUNDLE")
-          echo "Found app bundle: $APP_NAME"
-          echo "APP_NAME=$APP_NAME" >> "$GITHUB_ENV"
+          ZIP_NAME="${APP_NAME%.app}.zip"
           
-          zip -r "${APP_NAME%.app}.zip" "$APP_NAME"
+          echo "Found app bundle: $APP_NAME"
+          echo "Creating zip: $ZIP_NAME"
+          
+          zip -r "$ZIP_NAME" "$APP_NAME"
+          
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"   # 👈 guardamos el nombre del ZIP, no del .app
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-app
-          path: build/macos/Build/Products/Release/${{ env.APP_NAME }}
+          path: build/macos/Build/Products/Release/${{ env.ZIP_NAME }}
           retention-days: 30
