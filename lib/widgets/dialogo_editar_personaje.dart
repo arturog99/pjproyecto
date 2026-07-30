@@ -116,6 +116,18 @@ class _DialogoEditarPersonajeState extends State<DialogoEditarPersonaje> {
     }
   }
 
+  Future<void> _eliminarFoto() async {
+    if (_fotoPath == null) return;
+
+    if (_fotoPath != _fotoOriginal) {
+      await FileService.eliminarImagenLocal(_fotoPath);
+    }
+
+    setState(() {
+      _fotoPath = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -184,6 +196,12 @@ class _DialogoEditarPersonajeState extends State<DialogoEditarPersonaje> {
             if (_fotoPath != null) ...[
               const SizedBox(height: 8),
               const Text('Foto seleccionada ✓', style: TextStyle(color: Colors.green)),
+              TextButton.icon(
+                onPressed: _cargando ? null : _eliminarFoto,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Eliminar foto'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+              ),
             ],
           ],
         ),

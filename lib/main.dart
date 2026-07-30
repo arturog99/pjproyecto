@@ -11,6 +11,11 @@ import 'services/file_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Limita la caché de bitmaps para que navegar por muchas fichas no haga
+  // crecer indefinidamente el consumo de memoria.
+  PaintingBinding.instance.imageCache.maximumSize = 100;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 40 << 20;
   
   await Hive.initFlutter();
   Hive.registerAdapter(TipoFranquiciaAdapter());
@@ -122,7 +127,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
-  void _confirmarEliminacion(Personaje personaje, PersonajeProvider provider) {
+  Future<void> _confirmarEliminacion(
+    Personaje personaje,
+    PersonajeProvider provider,
+  ) async {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -135,9 +143,11 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               child: const Text('Cancelar'),
             ),
             FilledButton(
-              onPressed: () {
-                provider.eliminarPersonaje(personaje);
-                Navigator.of(context).pop();
+              onPressed: () async {
+                await provider.eliminarPersonaje(personaje);
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                }
               },
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
               child: const Text('Eliminar'),
@@ -178,6 +188,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   }
 
   Future<void> _importarDatos(PersonajeProvider provider) async {
+    ResultadoImportacion? analisis;
     try {
       final resultadoArchivo = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -187,7 +198,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
       if (resultadoArchivo == null || resultadoArchivo.files.single.path == null) return;
 
-      final analisis = await provider.analizarImportacion(resultadoArchivo.files.single.path!);
+      analisis = await provider.analizarImportacion(resultadoArchivo.files.single.path!);
 
       if (!mounted) return;
 
@@ -210,6 +221,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al importar: $e')),
         );
+      }
+    } finally {
+      if (analisis != null) {
+        await provider.descartarImportacion(analisis);
       }
     }
   }
@@ -252,15 +267,20 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.upload_file),
-                onPressed: () => _exportarDatos(provider),
+                onPressed: provider.estaCargando || provider.errorCarga != null
+                    ? null
+                    : () => _exportarDatos(provider),
                 tooltip: 'Exportar datos',
               ),
               IconButton(
                 icon: const Icon(Icons.file_download),
-                onPressed: () => _importarDatos(provider),
+                onPressed: provider.estaCargando || provider.errorCarga != null
+                    ? null
+                    : () => _importarDatos(provider),
                 tooltip: 'Importar datos',
               ),
               PopupMenuButton<String>(
+                enabled: !provider.estaCargando && provider.errorCarga == null,
                 onSelected: (opcion) {
                   if (opcion == 'nombre') {
                     provider.ordenarPorNombre();
@@ -281,7 +301,19 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               ),
             ],
           ),
-          body: Column(
+          body: provider.estaCargando
+              ? const Center(child: CircularProgressIndicator())
+              : provider.errorCarga != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      provider.errorCarga!,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : Column(
             children: [
               // Barra de búsqueda
               Padding(
@@ -424,7 +456,9 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
             ],
           ),
           floatingActionButton: FloatingActionButton(
-            onPressed: _abrirDialogoAnadir,
+            onPressed: provider.estaCargando || provider.errorCarga != null
+                ? null
+                : _abrirDialogoAnadir,
             tooltip: 'Añadir personaje',
             child: const Icon(Icons.add),
           ),

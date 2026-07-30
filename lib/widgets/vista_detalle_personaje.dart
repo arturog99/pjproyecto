@@ -21,7 +21,10 @@ class VistaDetallePersonaje extends StatelessWidget {
     }
   }
 
-  void _confirmarEliminacion(BuildContext context, PersonajeProvider provider) {
+  Future<void> _confirmarEliminacion(
+    BuildContext context,
+    PersonajeProvider provider,
+  ) async {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -34,8 +37,9 @@ class VistaDetallePersonaje extends StatelessWidget {
               child: const Text('Cancelar'),
             ),
             FilledButton(
-              onPressed: () {
-                provider.eliminarPersonaje(personaje);
+              onPressed: () async {
+                await provider.eliminarPersonaje(personaje);
+                if (!context.mounted) return;
                 Navigator.of(context).pop(); // Cerrar diálogo
                 Navigator.of(context).pop(); // Cerrar vista detalle
               },
@@ -106,6 +110,8 @@ class VistaDetallePersonaje extends StatelessWidget {
                         child: Image.file(
                           File(personaje.fotoPath!),
                           fit: BoxFit.cover,
+                          cacheWidth: 400,
+                          cacheHeight: 400,
                           errorBuilder: (context, error, stackTrace) {
                             return Icon(
                               Icons.person,

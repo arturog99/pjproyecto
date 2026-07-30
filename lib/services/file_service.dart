@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -7,13 +9,27 @@ import 'package:image/image.dart' as img;
 
 const int _dimensionMaxima = 1024;
 const int _calidadJpg = 85;
+// Evita intentar descomprimir fotografías que podrían agotar la memoria del
+// dispositivo. Las fotos de móvil habituales quedan ampliamente cubiertas.
+const int _tamanoMaximoArchivoOrigen = 12 * 1024 * 1024;
 
 class FileService {
   static Future<String> copiarImagenALocal(String rutaOriginal) async {
     try {
-      final bytesOriginales = await File(rutaOriginal).readAsBytes();
+      final archivoOriginal = File(rutaOriginal);
+      final tamanoArchivo = await archivoOriginal.length();
+      if (tamanoArchivo > _tamanoMaximoArchivoOrigen) {
+        throw Exception('La imagen supera el tamaño máximo permitido de 12 MB.');
+      }
 
-      final bytesComprimidos = await compute(_redimensionarYComprimir, bytesOriginales);
+      // Evita hacer una copia adicional de la foto al enviarla al isolate que
+      // realiza la compresión.
+      final bytesOriginales = await archivoOriginal.readAsBytes();
+      final resultado = await compute(
+        _redimensionarYComprimir,
+        TransferableTypedData.fromList([bytesOriginales]),
+      );
+      final bytesComprimidos = resultado.materialize().asUint8List();
 
       final directorioApp = await getApplicationDocumentsDirectory();
       final directorioImagenes = Directory(path.join(directorioApp.path, 'imagenes'));
@@ -22,7 +38,8 @@ class FileService {
         await directorioImagenes.create(recursive: true);
       }
 
-      final nombreArchivo = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final nombreArchivo =
+          '${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}.jpg';
       final rutaDestino = path.join(directorioImagenes.path, nombreArchivo);
 
       await File(rutaDestino).writeAsBytes(bytesComprimidos);
@@ -45,9 +62,28 @@ class FileService {
       print('Error al eliminar imagen: $e');
     }
   }
+
+  static Future<void> limpiarImagenesHuerfanas(
+    Iterable<String?> rutasEnUso,
+  ) async {
+    final rutasProtegidas = rutasEnUso.whereType<String>().toSet();
+    final directorioApp = await getApplicationDocumentsDirectory();
+    final directorioImagenes = Directory(path.join(directorioApp.path, 'imagenes'));
+
+    if (!await directorioImagenes.exists()) return;
+
+    await for (final entidad in directorioImagenes.list(followLinks: false)) {
+      if (entidad is File && !rutasProtegidas.contains(entidad.path)) {
+        await entidad.delete();
+      }
+    }
+  }
 }
 
-Uint8List _redimensionarYComprimir(Uint8List bytesOriginales) {
+TransferableTypedData _redimensionarYComprimir(
+  TransferableTypedData datosTransferibles,
+) {
+  final bytesOriginales = datosTransferibles.materialize().asUint8List();
   final imagenDecodificada = img.decodeImage(bytesOriginales);
 
   if (imagenDecodificada == null) {
@@ -65,5 +101,7 @@ Uint8List _redimensionarYComprimir(Uint8List bytesOriginales) {
     );
   }
 
-  return Uint8List.fromList(img.encodeJpg(imagenFinal, quality: _calidadJpg));
+  return TransferableTypedData.fromList([
+    Uint8List.fromList(img.encodeJpg(imagenFinal, quality: _calidadJpg)),
+  ]);
 }

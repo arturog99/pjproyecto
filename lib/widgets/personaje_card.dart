@@ -54,6 +54,8 @@ class PersonajeCard extends StatelessWidget {
                         child: Image.file(
                           File(personaje.fotoPath!),
                           fit: BoxFit.cover,
+                          cacheWidth: 160,
+                          cacheHeight: 160,
                           errorBuilder: (context, error, stackTrace) {
                             return Icon(
                               Icons.person,
